@@ -1,5 +1,5 @@
 name: "Regulatory Signals repo check"
-description: "Run Regulatory Signals deterministic checks (unchecked fetch responses, silent webhook success, button-to-route gaps, webhook verification) on a public GitHub repository and write the result to the job summary."
+description: "Run Regulatory Signals deterministic checks on a public GitHub repo and write the result to the job summary."
 author: "Regulatory Signals"
 branding:
   icon: "shield"
