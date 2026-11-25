@@ -75,6 +75,10 @@ run clean true RS_REPO_URL=; check "empty repo url warns, no request" "$RC/$(req
 run clean true RS_API_URL= HTTPS_PROXY=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 NO_PROXY= no_proxy= RS_ATTEMPTS=1
 check "empty api-url falls back to the https default (tried, failed locally, build passes)" "$RC/$(reqs)/$(grep -c 'HTTP 000' "$T/sum")" "0/0/1"
 run clean true "RS_API_KEY=k 'with space'\$(id)"; check "odd key is sent verbatim, not shell-interpreted" "$(first .key)" "k 'with space'\$(id)"
+run clean true 'RS_API_KEY=k"q\b'; check "key with quote and backslash is sent verbatim" "$(first .key)" 'k"q\b'
+run clean true "RS_API_KEY=$(printf 'k"\noutput = "%s/pwned"' "$T")"; check "key with a newline is refused, no request, no file written" "$RC/$(reqs)/$(ls "$T/pwned" 2>/dev/null | wc -l)" "0/0/0"
+run clean true RS_ATTEMPTS=abc; check "non-numeric RS_ATTEMPTS falls back to 3 and still works" "$RC/$FINDINGS" "0/0"
+run slow true RS_MAX_TIME=1 RS_ATTEMPTS=3; check "a timeout is not retried" "$(reqs)" "1"
 run clean true RS_API_URL=http://example.com; check "plain http to a remote host is refused" "$RC/$(reqs)/$(grep -c 'must start with https' "$T/sum")" "0/0/1"
 run clean true RS_API_URL=http://127.0.0.1.evil.example; check "loopback-lookalike host is refused" "$RC/$(reqs)" "0/0"
 run clean true RS_API_URL=http://localhost; check "localhost http is allowed (then fails to connect, build passes)" "$RC" "0"

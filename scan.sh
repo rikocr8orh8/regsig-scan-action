@@ -31,6 +31,7 @@ case "$RS_API_URL" in
   https://*|http://127.0.0.1|http://127.0.0.1:*|http://localhost|http://localhost:*) ;;
   *) did_not_run "api-url must start with https:// (plain http is only allowed for localhost). The key was not sent." ;;
 esac
+case "$RS_API_KEY" in *[[:cntrl:]]*) did_not_run "The API key contains a control character or newline. Check the secret value." ;; esac
 [ -n "${RS_REPO_URL:-}" ] || did_not_run "No repository URL was provided."
 
 fail_flag=$(printf '%s' "${RS_FAIL:-false}" | tr '[:upper:]' '[:lower:]')
@@ -38,16 +39,22 @@ case "$fail_flag" in true|false|"") ;; *) echo "::warning::fail-on-findings must
 
 tmp=$(mktemp -d) || did_not_run "Could not create a temporary directory."
 trap 'rm -rf "$tmp"' EXIT
-resp="$tmp/resp"; hdrs="$tmp/hdrs"
+resp="$tmp/resp"
 # Key goes through a private config file, not the process list.
-( umask 077; printf 'header = "X-RegulatorySignals-Key: %s"\n' "$RS_API_KEY" > "$tmp/cfg" )
+key_esc=${RS_API_KEY//\\/\\\\}; key_esc=${key_esc//\"/\\\"}   # curl config strings: escape \ and "
+( umask 077; printf 'header = "X-RegulatorySignals-Key: %s"\n' "$key_esc" > "$tmp/cfg" )
 body=$(jq -n --arg u "$RS_REPO_URL" '{repoUrl:$u, mode:"deterministic"}')
 
 attempts="${RS_ATTEMPTS:-3}"; delay="${RS_RETRY_DELAY:-3}"; n=0; code="000"
+case "$attempts" in ''|*[!0-9]*|0) attempts=3 ;; esac
+case "$delay" in ''|*[!0-9]*) delay=3 ;; esac
+case "${RS_MAX_TIME:-150}" in ''|*[!0-9]*) RS_MAX_TIME=150 ;; esac
 while [ "$n" -lt "$attempts" ]; do
   n=$((n+1))
-  code=$(curl -sS -o "$resp" -D "$hdrs" -w '%{http_code}' --connect-timeout 20 --max-time "${RS_MAX_TIME:-150}" --max-filesize 5000000 \
-    -X POST "$RS_API_URL/api/v1/scan" -K "$tmp/cfg" -H "Content-Type: application/json" --data "$body" 2>"$tmp/err") || code="000"
+  crc=0
+  code=$(curl -sS -o "$resp" -w '%{http_code}' --connect-timeout 20 --max-time "${RS_MAX_TIME:-150}" --max-filesize 5000000 \
+    -X POST "$RS_API_URL/api/v1/scan" -K "$tmp/cfg" -H "Content-Type: application/json" --data "$body" 2>"$tmp/err") || { crc=$?; code="000"; }
+  [ "$crc" = "28" ] && break   # timed out: do not spend more runner minutes on retries
   case "$code" in 429|5??|000) [ "$n" -lt "$attempts" ] && sleep "$delay" && continue ;; esac
   break
 done
