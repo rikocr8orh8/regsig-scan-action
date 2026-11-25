@@ -1,7 +1,7 @@
 """Fake Regulatory Signals API for tests. Usage: mock_server.py PORT REQUEST_LOG CASE
 Every request is appended as one JSON line to REQUEST_LOG. No network access beyond 127.0.0.1."""
 import json, sys, time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 def checks(**kw):
     base = {"hasRateLimiting": True, "resOkViolationCount": 0, "webhookSilentSuccess": False, "paymentWebhookVerified": None,
@@ -29,6 +29,9 @@ CASES = {
                                             resOkViolationCount="9")), 0)],
     "string_counts": [(200, json.dumps(checks(resOkViolationCount="3", buttonRouteGapCount="2")), 0)],
     "providers_string": [(200, json.dumps(checks(aiProviders="anthropic")), 0)],
+    "boundary": [(200, json.dumps(checks(resOkViolationCount=-1, buttonRouteGapCount=1)), 0)],
+    "boundary0": [(200, json.dumps(checks(resOkViolationCount=0, buttonRouteGapCount=0)), 0)],
+    "huge": [(200, json.dumps(dict(checks(), pad="x" * 6000000)), 0)],
     "slow": [(200, json.dumps(CLEAN), 4)],
 }
 PORT, LOG, CASE = int(sys.argv[1]), sys.argv[2], sys.argv[3]
@@ -50,4 +53,4 @@ class H(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError): pass
     def log_message(self, *a): pass
 
-HTTPServer(("127.0.0.1", PORT), H).serve_forever()
+ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
